@@ -29,5 +29,7 @@
     {
       "name": "Antigravity"
     }
-  ]
+  ],
+  "manifest": "https://<GITHUB_TOKEN>@raw.githubusercontent.com/<YOUR_GITHUB_NAME>/wod-fight-module/main/module.json",
+  "download": "https://<GITHUB_TOKEN>@github.com/<YOUR_GITHUB_NAME>/wod-fight-module/archive/refs/heads/main.zip"
 }
