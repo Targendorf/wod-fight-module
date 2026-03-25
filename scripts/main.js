@@ -146,12 +146,13 @@ Hooks.on('renderCombatTracker', (app, html, data) => {
   
     // Add the "Start WoD Combat" button natively if game hasn't started
     if (!game.combat.started) {
-        const combatControls = html.find('#combat-controls');
-        const startBtn = combatControls.find('.combat-control[data-control="startCombat"]');
+        const startBtn = html.find('[data-control="startCombat"], [data-action="startCombat"]');
         
         if (startBtn.length) {
             // Add custom button next to the original
-            const wodBtn = $(`<a class="combat-control" title="${game.i18n.localize('WOD_FIGHT.StartCombat')}"><i class="fas fa-moon"></i> ${game.i18n.localize('WOD_FIGHT.StartCombat')}</a>`);
+            const btnTag = startBtn[0].tagName.toLowerCase();
+            const btnClass = startBtn.attr('class') || 'combat-control';
+            const wodBtn = $(`<${btnTag} class="${btnClass}" title="${game.i18n.localize('WOD_FIGHT.StartCombat')}"><i class="fas fa-moon"></i> ${game.i18n.localize('WOD_FIGHT.StartCombat')}</${btnTag}>`);
             
             wodBtn.on('click', async (ev) => {
                 ev.preventDefault();
@@ -177,11 +178,16 @@ Hooks.on('renderCombatTracker', (app, html, data) => {
         // Phase Banner
         const phaseKey = currentPhase === "declaration" ? 'WOD_FIGHT.PhaseDeclaration' : 'WOD_FIGHT.PhaseExecution';
         const header = $(`<div class="wod-phase-header ${currentPhase}"><h3>${game.i18n.localize(phaseKey)}</h3></div>`);
-        html.find('#combat-round').before(header);
+        const roundHeader = html.find('#combat-round, .combat-tracker-header');
+        if (roundHeader.length) {
+            roundHeader.first().before(header);
+        } else {
+            html.find('.directory-list').before(header);
+        }
   
         // Delay Turn Buttons for each combatant
-        html.find('.directory-item.combatant').each((i, el) => {
-            const combatantId = $(el).data('documentId');
+        html.find('.combatant').each((i, el) => {
+            const combatantId = $(el).data('documentId') || $(el).data('combatantId');
             const combatant = game.combat.combatants.get(combatantId);
             
             if (combatant && combatant.initiative !== null) {
