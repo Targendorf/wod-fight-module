@@ -1,0 +1,9 @@
+{
+  "WOD_FIGHT": {
+    "StartCombat": "Start WoD Combat",
+    "PhaseDeclaration": "Phase 1: Declaration",
+    "PhaseExecution": "Phase 2: Execution",
+    "DelayTurn": "Delay Turn",
+    "DelayTurnTooltip": "Reduce initiative by 1 to act later in the phase."
+  }
+}

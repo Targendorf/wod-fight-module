@@ -1,0 +1,25 @@
+.wod-phase-header {
+  text-align: center;
+  padding: 5px;
+  margin: 5px 0;
+  border: 1px solid var(--color-border-dark-1);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.4);
+}
+.wod-phase-header.declaration {
+  color: var(--color-text-light-highlight);
+  border-color: #8b0000;
+  box-shadow: 0 0 5px #ff4500 inset;
+}
+.wod-phase-header.execution {
+  color: gold;
+  border-color: #ffd700;
+  box-shadow: 0 0 5px #daa520 inset;
+}
+.wod-delay-turn {
+  color: #ff6400;
+}
+.wod-delay-turn:hover {
+  color: #ff0000;
+  text-shadow: 0 0 5px #ff0000;
+}

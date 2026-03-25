@@ -1,0 +1,9 @@
+{
+  "WOD_FIGHT": {
+    "StartCombat": "Начать бой WoD",
+    "PhaseDeclaration": "Фаза 1: Заявление",
+    "PhaseExecution": "Фаза 2: Выполнение",
+    "DelayTurn": "Отложить ход",
+    "DelayTurnTooltip": "Уменьшить инициативу на 1, чтобы действовать позже."
+  }
+}
