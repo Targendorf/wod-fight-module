@@ -30,6 +30,6 @@
       "name": "Antigravity"
     }
   ],
-  "manifest": "https://<GITHUB_TOKEN>@raw.githubusercontent.com/<YOUR_GITHUB_NAME>/wod-fight-module/main/module.json",
-  "download": "https://<GITHUB_TOKEN>@github.com/<YOUR_GITHUB_NAME>/wod-fight-module/archive/refs/heads/main.zip"
+  "manifest": "https://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@raw.githubusercontent.com/Targendorf/wod-fight-module/main/module.json",
+  "download": "https://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@github.com/Targendorf/wod-fight-module/archive/refs/heads/main.zip"
 }
