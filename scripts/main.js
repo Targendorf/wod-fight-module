@@ -176,6 +176,7 @@ Hooks.on('renderCombatTracker', (app, html, data) => {
     // UI Additions for WoD mode
     if (isWodActive && game.combat.started) {
         // Phase Banner
+        html.find('.wod-phase-header').remove();
         const phaseKey = currentPhase === "declaration" ? 'WOD_FIGHT.PhaseDeclaration' : 'WOD_FIGHT.PhaseExecution';
         const header = $(`<div class="wod-phase-header ${currentPhase}"><h3>${game.i18n.localize(phaseKey)}</h3></div>`);
         const roundHeader = html.find('#combat-round, .combat-tracker-header');
