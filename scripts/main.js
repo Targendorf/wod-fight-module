@@ -138,6 +138,7 @@ Hooks.once('init', () => {
 
 
 Hooks.on('renderCombatTracker', (app, html, data) => {
+    html = $(html);
     if (!game.combat) return;
   
     const isWodActive = game.combat.getFlag("wod-fight-module", "active");
