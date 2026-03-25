@@ -13,16 +13,24 @@ Hooks.once('init', () => {
             if (currentPhase === "declaration") {
                 // Lowest initiative goes first
                 this.turns = turns.sort((a, b) => {
-                    let aInit = Number.isFinite(a.initiative) ? a.initiative : 9999;
-                    let bInit = Number.isFinite(b.initiative) ? b.initiative : 9999;
-                    return aInit - bInit;
+                    let aInit = Number(a.initiative);
+                    if (Number.isNaN(aInit)) aInit = 9999;
+                    let bInit = Number(b.initiative);
+                    if (Number.isNaN(bInit)) bInit = 9999;
+                    
+                    let diff = aInit - bInit;
+                    return diff !== 0 ? diff : a.name.localeCompare(b.name);
                 });
             } else if (currentPhase === "execution") {
                 // Highest initiative goes first
                 this.turns = turns.sort((a, b) => {
-                    let aInit = Number.isFinite(a.initiative) ? a.initiative : -9999;
-                    let bInit = Number.isFinite(b.initiative) ? b.initiative : -9999;
-                    return bInit - aInit;
+                    let aInit = Number(a.initiative);
+                    if (Number.isNaN(aInit)) aInit = -9999;
+                    let bInit = Number(b.initiative);
+                    if (Number.isNaN(bInit)) bInit = -9999;
+                    
+                    let diff = bInit - aInit;
+                    return diff !== 0 ? diff : a.name.localeCompare(b.name);
                 });
             }
             return this.turns;
