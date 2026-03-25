@@ -49,6 +49,10 @@ Hooks.once('init', () => {
                     });
                 } else if (currentPhase === "execution") {
                     // Reached end of execution. Switch to declaration phase of NEXT round
+                    const cIds = this.combatants.map(c => c.id);
+                    if (cIds.length) {
+                        await this.rollInitiative(cIds);
+                    }
                     return this.update({
                         round: this.round + 1,
                         turn: 0,
@@ -112,6 +116,10 @@ Hooks.once('init', () => {
     CONFIG.Combat.documentClass.prototype.nextRound = async function() {
         const isWodActive = this.getFlag("wod-fight-module", "active");
         if (isWodActive) {
+            const cIds = this.combatants.map(c => c.id);
+            if (cIds.length) {
+                await this.rollInitiative(cIds);
+            }
             return this.update({
                 round: Math.max(this.round, 0) + 1,
                 turn: 0,
@@ -156,9 +164,10 @@ Hooks.on('renderCombatTracker', (app, html, data) => {
             
             wodBtn.on('click', async (ev) => {
                 ev.preventDefault();
-                // Auto roll initiatives if missing
-                if ( game.combat.combatants.some(c => c.initiative === null) ) {
-                    await game.combat.rollAll();
+                // Roll initiative for everyone
+                const cIds = game.combat.combatants.map(c => c.id);
+                if (cIds.length) {
+                    await game.combat.rollInitiative(cIds);
                 }
                 // Start properly with phase zeroing
                 await game.combat.update({
