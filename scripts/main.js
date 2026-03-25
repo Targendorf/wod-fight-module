@@ -3,15 +3,28 @@ Hooks.once('init', () => {
 
     const originalSetupTurns = CONFIG.Combat.documentClass.prototype.setupTurns;
 
-    // Override setupTurns to reverse the order strictly during the declaration phase
+    // Override setupTurns to explicitly sort based on the WoD phase
     CONFIG.Combat.documentClass.prototype.setupTurns = function() {
         const turns = originalSetupTurns.call(this);
         const isWodActive = this.getFlag("wod-fight-module", "active");
         const currentPhase = this.getFlag("wod-fight-module", "phase");
 
-        if (isWodActive && currentPhase === "declaration") {
-            // Reverse sorting, so lowest initiative goes first in declaration phase
-            this.turns = turns.reverse();
+        if (isWodActive) {
+            if (currentPhase === "declaration") {
+                // Lowest initiative goes first
+                this.turns = turns.sort((a, b) => {
+                    let aInit = Number.isFinite(a.initiative) ? a.initiative : 9999;
+                    let bInit = Number.isFinite(b.initiative) ? b.initiative : 9999;
+                    return aInit - bInit;
+                });
+            } else if (currentPhase === "execution") {
+                // Highest initiative goes first
+                this.turns = turns.sort((a, b) => {
+                    let aInit = Number.isFinite(a.initiative) ? a.initiative : -9999;
+                    let bInit = Number.isFinite(b.initiative) ? b.initiative : -9999;
+                    return bInit - aInit;
+                });
+            }
             return this.turns;
         }
         

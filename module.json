@@ -2,10 +2,10 @@
   "id": "wod-fight-module",
   "title": "WoD 20th Combat Tracker",
   "description": "Adds a two-phase combat system (Declaration/Execution) for World of Darkness 20th Anniversary Edition.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "compatibility": {
     "minimum": 11,
-    "verified": 12
+    "verified": 13
   },
   "scripts": [
     "scripts/main.js"
