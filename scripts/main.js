@@ -1,4 +1,4 @@
-Hooks.once('init', () => {
+Hooks.once('setup', () => {
     console.log("WoD Fight Module | Initializing...");
 
     const originalSetupTurns = CONFIG.Combat.documentClass.prototype.setupTurns;
