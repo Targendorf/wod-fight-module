@@ -156,9 +156,10 @@ Hooks.once('ready', () => {
     // Intercept Actor data preparation to override light wound penalties if setting is enabled.
     // In many WoD systems (e.g. 'worldofdarkness' or 'vtm5e'), wound penalties are applied to `actor.system.health.penalty`.
     if (CONFIG.Actor && CONFIG.Actor.documentClass) {
-        const originalPrepareDerivedData = CONFIG.Actor.documentClass.prototype.prepareDerivedData;
-        CONFIG.Actor.documentClass.prototype.prepareDerivedData = function() {
-            originalPrepareDerivedData.call(this);
+        // Warning: Some older WoD systems override prepareData entirely, so we patch prepareData instead of prepareDerivedData.
+        const originalPrepareData = CONFIG.Actor.documentClass.prototype.prepareData;
+        CONFIG.Actor.documentClass.prototype.prepareData = function() {
+            originalPrepareData.call(this);
             
             try {
                 if (game.settings.get("wod-fight-module", "ignoreLightWounds")) {
@@ -191,10 +192,14 @@ Hooks.once('ready', () => {
                         
                         // If they have NO heavy damage (only Bashing / or none), remove the penalty
                         if (!hasHeavy) {
-                            // Deep override the properties in case they are getters that failed to assign normally
-                            Object.defineProperty(this.system.health, "penalty", { value: 0, writable: true, configurable: true });
+                            // Some sheets expect the string "0" instead of the number 0
+                            this.system.health.penalty = "0";
+                            
+                            // Deep override the properties in case they are getters
+                            Object.defineProperty(this.system.health, "penalty", { value: "0", writable: true, configurable: true });
                             if (this.system.health.damage) {
-                                Object.defineProperty(this.system.health.damage, "penalty", { value: 0, writable: true, configurable: true });
+                                this.system.health.damage.penalty = "0";
+                                Object.defineProperty(this.system.health.damage, "penalty", { value: "0", writable: true, configurable: true });
                             }
                             
                             // Let's also set a special flag so the UI can know we suppressed it
@@ -226,10 +231,27 @@ Hooks.on("renderActorSheet", (app, html, data) => {
                 const el = $(this);
                 // If the element has a "-1", change to "0"
                 if (el.text().includes("-1")) el.text("0");
-                if (el.val() === "-1" || el.val() === -1) el.val(0);
+                if (el.val() === "-1" || el.val() == -1) el.val(0);
             });
         }
     }
+});
+
+Hooks.on("renderDialog", (app, html, data) => {
+    // Blanket suppress -1 wound penalties in ANY active dialog 
+    // if the module believes it's suppressing for the *current user's* character.
+    if (!game.settings.get("wod-fight-module", "ignoreLightWounds")) return;
+    
+    // We aggressively find any inputs labeled penalty that have -1 and change to 0 as fallback
+    html.find('input[type="number"], input[type="text"]').each(function() {
+        const name = this.name?.toLowerCase() || "";
+        const id = this.id?.toLowerCase() || "";
+        if (name.includes("penalty") || id.includes("penalty") || id.includes("wound")) {
+            if ($(this).val() == "-1") {
+                $(this).val(0);
+            }
+        }
+    });
 });
 
 // ─── Combat prototype overrides ───────────────────────────────────────────────
