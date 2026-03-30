@@ -4,6 +4,13 @@
     "PhaseDeclaration": "Фаза 1: Заявление",
     "PhaseExecution": "Фаза 2: Выполнение",
     "DelayTurn": "Отложить ход",
-    "DelayTurnTooltip": "Уменьшить инициативу на 1, чтобы действовать позже."
+    "DelayTurnTooltip": "Уменьшить инициативу на 1, чтобы действовать позже.",
+    "RollInitiativeFor": "Бросок инициативы для",
+    "InitiativeRoll": "Инициатива",
+    "Dexterity": "Ловкость",
+    "Wits": "Смекалка",
+    "Roll": "Бросить",
+    "Cancel": "Отмена",
+    "UnknownActor": "Неизвестный"
   }
 }

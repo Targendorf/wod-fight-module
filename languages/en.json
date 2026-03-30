@@ -4,6 +4,13 @@
     "PhaseDeclaration": "Phase 1: Declaration",
     "PhaseExecution": "Phase 2: Execution",
     "DelayTurn": "Delay Turn",
-    "DelayTurnTooltip": "Reduce initiative by 1 to act later in the phase."
+    "DelayTurnTooltip": "Reduce initiative by 1 to act later in the phase.",
+    "RollInitiativeFor": "Roll Initiative for",
+    "InitiativeRoll": "Initiative Roll",
+    "Dexterity": "Dexterity",
+    "Wits": "Wits",
+    "Roll": "Roll",
+    "Cancel": "Cancel",
+    "UnknownActor": "Unknown"
   }
 }

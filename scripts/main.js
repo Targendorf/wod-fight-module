@@ -3,24 +3,115 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Sort combatant turns according to WoD phase rules:
- *  - declaration: ascending (lowest initiative → first to declare)
- *  - execution:   descending (highest initiative → first to act)
+ * Try to extract an attribute value from common WoD system data paths.
  */
+function getWodAttribute(actor, attrName) {
+    if (!actor || !actor.system) return 0;
+    const sys = actor.system;
+    
+    // Check direct attributes (e.g. system.attributes.dexterity.value)
+    if (sys.attributes?.[attrName]?.value !== undefined) {
+        return parseInt(sys.attributes[attrName].value) || 0;
+    }
+    
+    // Check physical/social/mental categories
+    for (const cat of ["physical", "social", "mental"]) {
+        if (sys.attributes?.[cat]?.[attrName]?.value !== undefined) {
+            return parseInt(sys.attributes[cat][attrName].value) || 0;
+        }
+    }
+    
+    return 0; // Fallback
+}
+
+/**
+ * Roll WoD initiative for a single combatant automatically from character sheet.
+ * Formula: 1d10 + dexterity + wits
+ * The stored value = roll_result + modifier (e.g. 9.4 means roll=5, dex+wits=4)
+ * This fractional part is used as a tiebreaker (higher modifier wins).
+ *
+ * @param {Combatant} combatant
+ * @returns {Promise<number|null>} The composite initiative value, or null if no actor.
+ */
+async function wodRollInitiative(combatant) {
+    if (!combatant.actor) return null;
+    const actorName = combatant.name ?? combatant.actor.name;
+
+    const dex = getWodAttribute(combatant.actor, "dexterity");
+    const wits = getWodAttribute(combatant.actor, "wits");
+    const modifier = dex + wits;
+
+    // Roll 1d10
+    const roll = new Roll("1d10");
+    await roll.evaluate();
+    const dieResult = roll.total;
+
+    // Show the roll result in chat
+    const dexLocalized = game.i18n.localize("WOD_FIGHT.Dexterity");
+    const witsLocalized = game.i18n.localize("WOD_FIGHT.Wits");
+    await roll.toMessage({
+        flavor: `${actorName} — ${game.i18n.localize("WOD_FIGHT.InitiativeRoll")}: ${dieResult} + ${modifier} (${dexLocalized} ${dex} + ${witsLocalized} ${wits}) = ${dieResult + modifier}`,
+        speaker: ChatMessage.getSpeaker({ actor: combatant.actor })
+    });
+
+    // Store as composite value: whole = total, fraction = modifier
+    // e.g. dieResult=5, modifier=4 → 9.04
+    // Add a tiny random fraction (0.0001 to 0.0099) so that ties are broken 50/50 but remain stable for sorting.
+    const randomTieBreaker = Math.random() * 0.0098 + 0.0001; 
+    const composite = dieResult + modifier + (modifier / 100) + randomTieBreaker;
+    
+    return composite;
+}
+
+/**
+ * Roll initiative for all combatants sequentially (one dialog each).
+ * @param {Combat} combat
+ */
+async function wodRollAllInitiative(combat) {
+    for (const combatant of combat.combatants) {
+        const value = await wodRollInitiative(combatant);
+        if (value !== null) {
+            await combatant.update({ initiative: value });
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sort combatant turns according to WoD phase rules.
+//
+// Initiative is stored as a composite float: integer part = total initiative,
+// fractional part = modifier (dex+wits) encoded as /100.
+//
+// Example: roll=5, dex=2, wits=2 → stored as 9.04 (9 + 4/100)
+// Tiebreaker: higher stored value wins (i.e. higher modifier wins).
+// Full tie → 50/50 random.
+// ─────────────────────────────────────────────────────────────────────────────
 function wodSortTurns(turns, phase) {
     const sorted = [...turns];
+
+    const compareInit = (a, b) => {
+        const aInit = a.initiative;
+        const bInit = b.initiative;
+
+        const aNull = aInit === null || aInit === undefined;
+        const bNull = bInit === null || bInit === undefined;
+        if (aNull && bNull) return 0;
+        if (aNull) return 1;
+        if (bNull) return -1;
+
+        const diff = aInit - bInit;
+        if (Math.abs(diff) > 1e-9) return diff; // not equal
+        
+        // Fallback to name if exactly tied (shouldn't happen with random tiebreaker)
+        return (a.name ?? "").localeCompare(b.name ?? "");
+    };
+
     if (phase === "declaration") {
-        sorted.sort((a, b) => {
-            const aInit = a.initiative ?? 9999;
-            const bInit = b.initiative ?? 9999;
-            return aInit !== bInit ? aInit - bInit : (a.name ?? "").localeCompare(b.name ?? "");
-        });
+        // Ascending: lowest initiative declares first
+        sorted.sort((a, b) => compareInit(a, b));
     } else {
-        sorted.sort((a, b) => {
-            const aInit = a.initiative ?? -9999;
-            const bInit = b.initiative ?? -9999;
-            return aInit !== bInit ? bInit - aInit : (a.name ?? "").localeCompare(b.name ?? "");
-        });
+        // Descending: highest initiative acts first
+        sorted.sort((a, b) => compareInit(b, a));
     }
     return sorted;
 }
@@ -42,6 +133,25 @@ Hooks.once('setup', () => {
             return this.turns;
         }
         return turns;
+    };
+
+    // ── rollInitiative (override to use WoD dialog) ────────────────────────────
+    const originalRollInitiative = CONFIG.Combat.documentClass.prototype.rollInitiative;
+    CONFIG.Combat.documentClass.prototype.rollInitiative = async function (ids, options = {}) {
+        const isWodActive = this.getFlag("wod-fight-module", "active");
+        if (!isWodActive) return originalRollInitiative.call(this, ids, options);
+
+        // ids can be a single id or array
+        const idArray = Array.isArray(ids) ? ids : [ids];
+        for (const id of idArray) {
+            const combatant = this.combatants.get(id);
+            if (!combatant) continue;
+            const value = await wodRollInitiative(combatant);
+            if (value !== null) {
+                await combatant.update({ initiative: value });
+            }
+        }
+        return this;
     };
 
     // ── nextTurn ───────────────────────────────────────────────────────────────
@@ -74,8 +184,7 @@ Hooks.once('setup', () => {
                     });
                 } else {
                     // End of execution → re-roll initiative and start next round
-                    const cIds = this.combatants.map(c => c.id);
-                    if (cIds.length) await this.rollInitiative(cIds);
+                    await wodRollAllInitiative(this);
                     return this.update({
                         round: this.round + 1,
                         turn: 0,
@@ -126,8 +235,7 @@ Hooks.once('setup', () => {
     CONFIG.Combat.documentClass.prototype.nextRound = async function () {
         const isWodActive = this.getFlag("wod-fight-module", "active");
         if (isWodActive) {
-            const cIds = this.combatants.map(c => c.id);
-            if (cIds.length) await this.rollInitiative(cIds);
+            await wodRollAllInitiative(this);
             return this.update({ round: Math.max(this.round, 0) + 1, turn: 0, "flags.wod-fight-module.phase": "declaration" });
         }
         return originalNextRound.call(this);
@@ -145,8 +253,6 @@ Hooks.once('setup', () => {
 });
 
 // ─── Re-sort on any combat update ─────────────────────────────────────────────
-// This is the key hook that ensures the visual order in the tracker is always
-// correct, even if Foundry rebuilds the turn list after our setupTurns call.
 Hooks.on('updateCombat', (combat, changed, options, userId) => {
     const isWodActive = combat.getFlag("wod-fight-module", "active");
     if (!isWodActive) return;
@@ -176,14 +282,15 @@ Hooks.on('renderCombatTracker', (app, html, data) => {
 
             wodBtn.on('click', async (ev) => {
                 ev.preventDefault();
-                const cIds = game.combat.combatants.map(c => c.id);
-                if (cIds.length) await game.combat.rollInitiative(cIds);
+                // First set the flag so rollInitiative uses WoD dialog
                 await game.combat.update({
                     round: 1,
                     turn: 0,
                     "flags.wod-fight-module.active": true,
                     "flags.wod-fight-module.phase": "declaration"
                 });
+                // Then roll initiative via WoD dialogs
+                await wodRollAllInitiative(game.combat);
             });
 
             startBtn.after(wodBtn);
@@ -212,6 +319,8 @@ Hooks.on('renderCombatTracker', (app, html, data) => {
                 delayBtn.on('click', async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    // Reduce only the integer part (the visible total) by 1,
+                    // keeping the fractional tiebreaker intact.
                     await combatant.update({ initiative: combatant.initiative - 1 });
                 });
 
