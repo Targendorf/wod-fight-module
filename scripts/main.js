@@ -80,15 +80,19 @@ async function wodRollInitiative(combatant) {
 }
 
 /**
- * Roll initiative for all combatants sequentially (one dialog each).
+ * Roll initiative for all combatants sequentially, but bulk update.
  * @param {Combat} combat
  */
 async function wodRollAllInitiative(combat) {
+    const updates = [];
     for (const combatant of combat.combatants) {
         const value = await wodRollInitiative(combatant);
         if (value !== null) {
-            await combatant.update({ initiative: value });
+            updates.push({ _id: combatant.id, initiative: value });
         }
+    }
+    if (updates.length > 0) {
+        await combat.updateEmbeddedDocuments("Combatant", updates);
     }
 }
 
@@ -187,14 +191,44 @@ Hooks.once('ready', () => {
                         
                         // If they have NO heavy damage (only Bashing / or none), remove the penalty
                         if (!hasHeavy) {
-                            this.system.health.penalty = 0;
+                            // Deep override the properties in case they are getters that failed to assign normally
+                            Object.defineProperty(this.system.health, "penalty", { value: 0, writable: true, configurable: true });
+                            if (this.system.health.damage) {
+                                Object.defineProperty(this.system.health.damage, "penalty", { value: 0, writable: true, configurable: true });
+                            }
+                            
+                            // Let's also set a special flag so the UI can know we suppressed it
+                            this.flags = this.flags || {};
+                            this.flags["wod-fight-module"] = this.flags["wod-fight-module"] || {};
+                            this.flags["wod-fight-module"].suppressedPenalty = true;
+                        } else {
+                            if (this.flags?.["wod-fight-module"]) {
+                                this.flags["wod-fight-module"].suppressedPenalty = false;
+                            }
                         }
                     }
                 }
             } catch (e) {
-                // Ignore silent errors if the system data is unexpectedly structured 
+                console.warn("WoD Fight Module | Error wiping health penalty:", e);
             }
         };
+    }
+});
+
+// ─── Add dynamic hook to silence penalty in UI dialogs if needed ─────────────────
+// Many WoD combat dialogs pull max health penalty directly from html/dom inside render hooks
+Hooks.on("renderActorSheet", (app, html, data) => {
+    if (game.settings.get("wod-fight-module", "ignoreLightWounds")) {
+        const suppressed = app.actor?.flags?.["wod-fight-module"]?.suppressedPenalty;
+        if (suppressed) {
+            // Find traditional penalty containers and force them to "0" visually
+            html.find('.health-penalty, .penalty, .wound-penalty').each(function() {
+                const el = $(this);
+                // If the element has a "-1", change to "0"
+                if (el.text().includes("-1")) el.text("0");
+                if (el.val() === "-1" || el.val() === -1) el.val(0);
+            });
+        }
     }
 });
 
@@ -225,13 +259,17 @@ Hooks.once('setup', () => {
 
         // ids can be a single id or array
         const idArray = Array.isArray(ids) ? ids : [ids];
+        const updates = [];
         for (const id of idArray) {
             const combatant = this.combatants.get(id);
             if (!combatant) continue;
             const value = await wodRollInitiative(combatant);
             if (value !== null) {
-                await combatant.update({ initiative: value });
+                updates.push({ _id: combatant.id, initiative: value });
             }
+        }
+        if (updates.length > 0) {
+            await this.updateEmbeddedDocuments("Combatant", updates);
         }
         return this;
     };
