@@ -11,6 +11,8 @@
     "Wits": "Wits",
     "Roll": "Roll",
     "Cancel": "Cancel",
-    "UnknownActor": "Unknown"
+    "UnknownActor": "Unknown",
+    "IgnoreLightWounds": "Ignore Bashing Penalties",
+    "IgnoreLightWoundsHint": "If enabled, characters will not suffer dice penalties for Bashing damage (/). You will only receive a penalty if you have Lethal (X) or Aggravated (*) injuries."
   }
 }

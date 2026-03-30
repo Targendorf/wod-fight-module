@@ -9,16 +9,25 @@ function getWodAttribute(actor, attrName) {
     if (!actor || !actor.system) return 0;
     const sys = actor.system;
     
-    // Check direct attributes (e.g. system.attributes.dexterity.value)
-    if (sys.attributes?.[attrName]?.value !== undefined) {
-        return parseInt(sys.attributes[attrName].value) || 0;
-    }
-    
-    // Check physical/social/mental categories
-    for (const cat of ["physical", "social", "mental"]) {
-        if (sys.attributes?.[cat]?.[attrName]?.value !== undefined) {
-            return parseInt(sys.attributes[cat][attrName].value) || 0;
+    try {
+        // Check direct attributes (e.g. system.attributes.dexterity.value)
+        if (sys.attributes?.[attrName]?.value !== undefined) {
+            return parseInt(sys.attributes[attrName].value) || 0;
         }
+        
+        // Check physical/social/mental categories
+        for (const cat of ["physical", "social", "mental"]) {
+            if (sys.attributes?.[cat]?.[attrName]?.value !== undefined) {
+                return parseInt(sys.attributes[cat][attrName].value) || 0;
+            }
+        }
+        
+        // Some NPC sheets might keep stats directly at the top level
+        if (sys[attrName] !== undefined) {
+            return parseInt(sys[attrName]) || 0;
+        }
+    } catch (e) {
+        console.warn("WoD Fight Module | Error parsing attributes: ", e);
     }
     
     return 0; // Fallback
@@ -43,20 +52,26 @@ async function wodRollInitiative(combatant) {
 
     // Roll 1d10
     const roll = new Roll("1d10");
-    await roll.evaluate();
+    await roll.evaluate({ async: true });
     const dieResult = roll.total;
 
     // Show the roll result in chat
     const dexLocalized = game.i18n.localize("WOD_FIGHT.Dexterity");
     const witsLocalized = game.i18n.localize("WOD_FIGHT.Wits");
+    
+    // Support for unlinked NPC tokens needing explicit token/scene context
+    const speakerData = ChatMessage.getSpeaker({
+        actor: combatant.actor,
+        token: combatant.token,
+        alias: actorName
+    });
+
     await roll.toMessage({
         flavor: `${actorName} — ${game.i18n.localize("WOD_FIGHT.InitiativeRoll")}: ${dieResult} + ${modifier} (${dexLocalized} ${dex} + ${witsLocalized} ${wits}) = ${dieResult + modifier}`,
-        speaker: ChatMessage.getSpeaker({ actor: combatant.actor })
+        speaker: speakerData
     });
 
     // Store as composite value: whole = total, fraction = modifier
-    // e.g. dieResult=5, modifier=4 → 9.04
-    // Add a tiny random fraction (0.0001 to 0.0099) so that ties are broken 50/50 but remain stable for sorting.
     const randomTieBreaker = Math.random() * 0.0098 + 0.0001; 
     const composite = dieResult + modifier + (modifier / 100) + randomTieBreaker;
     
@@ -115,6 +130,53 @@ function wodSortTurns(turns, phase) {
     }
     return sorted;
 }
+
+// ─── Module Settings & Configuration ──────────────────────────────────────────
+
+Hooks.once('init', () => {
+    console.log("WoD Fight Module | Init hook fired. Registering settings.");
+
+    game.settings.register("wod-fight-module", "ignoreLightWounds", {
+        name: "WOD_FIGHT.IgnoreLightWounds",
+        hint: "WOD_FIGHT.IgnoreLightWoundsHint",
+        scope: "world",
+        config: true,
+        type: Boolean,
+        default: false,
+        onChange: () => { window.location.reload(); }
+    });
+});
+
+Hooks.once('ready', () => {
+    // Intercept Actor data preparation to override light wound penalties if setting is enabled.
+    // In many WoD systems (e.g. 'worldofdarkness' or 'vtm5e'), wound penalties are applied to `actor.system.health.penalty`.
+    if (CONFIG.Actor && CONFIG.Actor.documentClass) {
+        const originalPrepareDerivedData = CONFIG.Actor.documentClass.prototype.prepareDerivedData;
+        CONFIG.Actor.documentClass.prototype.prepareDerivedData = function() {
+            originalPrepareDerivedData.call(this);
+            
+            try {
+                if (game.settings.get("wod-fight-module", "ignoreLightWounds")) {
+                    let p = this.system?.health?.penalty;
+                    if (p !== undefined && p !== null) {
+                        const healthStr = JSON.stringify(this.system.health || {});
+
+                        // Check for any Lethal (X) or Aggravated (*, Ж, +) damage
+                        const hasHeavy = /"[^"]*"\s*:\s*"(?:x|X|\*|Ж|ж|\+)"/.test(healthStr) ||
+                                         /"(?:lethal|aggravated|летальный|аггравированный)"\s*:\s*[1-9]\d*/i.test(healthStr);
+                        
+                        // If they have NO heavy damage (only Bashing / or none), remove the penalty
+                        if (!hasHeavy) {
+                            this.system.health.penalty = 0;
+                        }
+                    }
+                }
+            } catch (e) {
+                // Ignore silent errors if the system data is unexpectedly structured 
+            }
+        };
+    }
+});
 
 // ─── Combat prototype overrides ───────────────────────────────────────────────
 
