@@ -360,10 +360,14 @@ Hooks.on('renderCombatTracker', (app, html, data) => {
         if (startBtn.length) {
             const btnTag = startBtn[0].tagName.toLowerCase();
             const btnClass = startBtn.attr('class') || 'combat-control';
-            const wodBtn = $(`<${btnTag} class="${btnClass}" title="${game.i18n.localize('WOD_FIGHT.StartCombat')}"><i class="fas fa-moon"></i> ${game.i18n.localize('WOD_FIGHT.StartCombat')}</${btnTag}>`);
+            
+            // Explicitly set type="button" to avoid "Form submission canceled" warnings if it's a button
+            const typeAttr = btnTag === 'button' ? ' type="button"' : '';
+            const wodBtn = $(`<${btnTag}${typeAttr} class="${btnClass}" title="${game.i18n.localize('WOD_FIGHT.StartCombat')}"><i class="fas fa-moon"></i> ${game.i18n.localize('WOD_FIGHT.StartCombat')}</${btnTag}>`);
 
             wodBtn.on('click', async (ev) => {
                 ev.preventDefault();
+                ev.stopPropagation();
                 // First set the flag so rollInitiative uses WoD dialog
                 await game.combat.update({
                     round: 1,
