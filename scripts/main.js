@@ -43,39 +43,40 @@ function getWodAttribute(actor, attrName) {
  * @returns {Promise<number|null>} The composite initiative value, or null if no actor.
  */
 async function wodRollInitiative(combatant) {
-    if (!combatant.actor) return null;
-    const actorName = combatant.name ?? combatant.actor.name;
+    // For unlinked NPC tokens, combatant.actor may be null — fall back to the token's actor
+    const actor = combatant.actor ?? combatant.token?.actor ?? null;
+    if (!actor) {
+        console.warn(`WoD Fight Module | Combatant "${combatant.name}" has no actor, skipping initiative roll.`);
+        return null;
+    }
+    const actorName = combatant.name ?? actor.name;
 
-    const dex = getWodAttribute(combatant.actor, "dexterity");
-    const wits = getWodAttribute(combatant.actor, "wits");
+    const dex  = getWodAttribute(actor, "dexterity");
+    const wits = getWodAttribute(actor, "wits");
     const modifier = dex + wits;
 
-    // Roll 1d10
+    // Roll 1d10 — do NOT pass { async } option, it was removed in Foundry v13
     const roll = new Roll("1d10");
-    await roll.evaluate({ async: true });
+    await roll.evaluate();
     const dieResult = roll.total;
 
-    // Show the roll result in chat
-    const dexLocalized = game.i18n.localize("WOD_FIGHT.Dexterity");
-    const witsLocalized = game.i18n.localize("WOD_FIGHT.Wits");
-    
-    // Support for unlinked NPC tokens needing explicit token/scene context
+    // Build a chat message. Use token context so unlinked NPCs get the right portrait/name.
     const speakerData = ChatMessage.getSpeaker({
-        actor: combatant.actor,
-        token: combatant.token,
-        alias: actorName
+        actor:  actor,
+        token:  combatant.token,
+        alias:  actorName
     });
 
+    const dexLoc  = game.i18n.localize("WOD_FIGHT.Dexterity");
+    const witsLoc = game.i18n.localize("WOD_FIGHT.Wits");
     await roll.toMessage({
-        flavor: `${actorName} — ${game.i18n.localize("WOD_FIGHT.InitiativeRoll")}: ${dieResult} + ${modifier} (${dexLocalized} ${dex} + ${witsLocalized} ${wits}) = ${dieResult + modifier}`,
+        flavor:  `${actorName} — ${game.i18n.localize("WOD_FIGHT.InitiativeRoll")}: ${dieResult} + ${modifier} (${dexLoc} ${dex} + ${witsLoc} ${wits}) = ${dieResult + modifier}`,
         speaker: speakerData
     });
 
-    // Store as composite value: whole = total, fraction = modifier
-    const randomTieBreaker = Math.random() * 0.0098 + 0.0001; 
-    const composite = dieResult + modifier + (modifier / 100) + randomTieBreaker;
-    
-    return composite;
+    // Store as composite value: whole = total roll, fractional = tiebreaker
+    const randomTieBreaker = Math.random() * 0.0098 + 0.0001;
+    return dieResult + modifier + (modifier / 100) + randomTieBreaker;
 }
 
 /**
@@ -158,12 +159,31 @@ Hooks.once('ready', () => {
             try {
                 if (game.settings.get("wod-fight-module", "ignoreLightWounds")) {
                     let p = this.system?.health?.penalty;
-                    if (p !== undefined && p !== null) {
-                        const healthStr = JSON.stringify(this.system.health || {});
+                    if (p !== undefined && p !== null && p !== 0 && p !== "0") {
+                        
+                        let hasHeavy = false;
+                        
+                        // Helper to recursively search the health object for any Heavy damage markers
+                        const checkHeavy = (obj) => {
+                            if (!obj || typeof obj !== 'object') return false;
+                            for (const key of Object.keys(obj)) {
+                                const val = obj[key];
+                                
+                                // Direct string match for heavy damage symbols in boxes
+                                if (typeof val === 'string' && /^(x|\*|ж|\+)$/i.test(val.trim())) return true;
+                                
+                                // Often systems have numeric properties tallying damage types
+                                if (typeof val === 'number' && val > 0 && /^(lethal|aggravated|летальный|аггравированный)$/i.test(key)) return true;
+                                
+                                // Recurse into sub-objects (e.g. arrays of boxes)
+                                if (typeof val === 'object' && val !== null) {
+                                    if (checkHeavy(val)) return true;
+                                }
+                            }
+                            return false;
+                        };
 
-                        // Check for any Lethal (X) or Aggravated (*, Ж, +) damage
-                        const hasHeavy = /"[^"]*"\s*:\s*"(?:x|X|\*|Ж|ж|\+)"/.test(healthStr) ||
-                                         /"(?:lethal|aggravated|летальный|аггравированный)"\s*:\s*[1-9]\d*/i.test(healthStr);
+                        hasHeavy = checkHeavy(this.system.health);
                         
                         // If they have NO heavy damage (only Bashing / or none), remove the penalty
                         if (!hasHeavy) {
