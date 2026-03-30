@@ -164,7 +164,9 @@ Hooks.once('ready', () => {
             try {
                 if (game.settings.get("wod-fight-module", "ignoreLightWounds")) {
                     let p = this.system?.health?.penalty;
-                    if (p !== undefined && p !== null && p !== 0 && p !== "0") {
+                    // Only run suppression when there is a real non-zero penalty
+                    const pNum = parseFloat(p);
+                    if (p !== undefined && p !== null && !isNaN(pNum) && pNum !== 0) {
                         
                         let hasHeavy = false;
                         
@@ -190,16 +192,19 @@ Hooks.once('ready', () => {
 
                         hasHeavy = checkHeavy(this.system.health);
                         
-                        // If they have NO heavy damage (only Bashing / or none), remove the penalty
+                        // If they have NO heavy damage (only Bashing / or none), remove the penalty.
+                        // IMPORTANT: use numeric 0, NOT the string "0".
+                        // The WoD system's DiceRoller reads this value and appends it directly to a roll
+                        // formula string. A string "0" causes formula corruption (e.g. "5d100") which
+                        // makes Foundry's Roll term parser throw (foundry.mjs:12389).
                         if (!hasHeavy) {
-                            // Some sheets expect the string "0" instead of the number 0
-                            this.system.health.penalty = "0";
+                            this.system.health.penalty = 0;
                             
-                            // Deep override the properties in case they are getters
-                            Object.defineProperty(this.system.health, "penalty", { value: "0", writable: true, configurable: true });
+                            // Deep override the properties in case they are getters/sealed
+                            Object.defineProperty(this.system.health, "penalty", { value: 0, writable: true, configurable: true, enumerable: true });
                             if (this.system.health.damage) {
-                                this.system.health.damage.penalty = "0";
-                                Object.defineProperty(this.system.health.damage, "penalty", { value: "0", writable: true, configurable: true });
+                                this.system.health.damage.penalty = 0;
+                                Object.defineProperty(this.system.health.damage, "penalty", { value: 0, writable: true, configurable: true, enumerable: true });
                             }
                             
                             // Let's also set a special flag so the UI can know we suppressed it
